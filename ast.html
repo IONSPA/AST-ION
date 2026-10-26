@@ -650,6 +650,8 @@ nav.bottom button{flex:1; border:none; border-radius:12px; padding:14px; font-si
   <div id="resumen"></div>
   <label class="fl">Correo del supervisor / prevencionista</label>
   <input type="email" id="f_email" placeholder="supervisor@empresa.cl">
+  <button class="btn green btn-mail" onclick="finalizarAST('mail')">✉ Enviar al equipo SST</button>
+  <p class="sub" style="margin:6px 2px 12px">Envía el PDF por correo a t.salazar, c.latorre, j.verdugo y b.sandoval (@ion-chile.com).</p>
   <button class="btn primary" onclick="finalizarAST('pdf')">⬇ Generar y descargar PDF</button>
   <button class="btn blue" onclick="finalizarAST('share')">📤 Compartir / Enviar por correo</button>
   <button class="btn ghost" onclick="nuevoDoc()">🗒 Nuevo documento en blanco</button>
@@ -1066,6 +1068,7 @@ function buildPDF(d){
 /* ================= GUARDAR / ENVIAR (AST) ================= */
 function validar(d){
   if(!d.trabajo){toast('⚠ Falta el Trabajo/Actividad (paso 1)');goStep(0);return false;}
+  if(!d.ubicacion){toast('⚠ Falta la Ubicación / Instalación (paso 1)');goStep(0);return false;}
   if(!d.resp){toast('⚠ Falta el nombre del responsable (paso 1)');goStep(0);return false;}
   if(!d.pasos.length){toast('⚠ Agregue al menos un paso de la tarea');goStep(2);return false;}
   if(!d.fotos.area.length){toast('⚠ Tome una fotografía del área de trabajo (paso 5)');goStep(4);return false;}
@@ -1079,7 +1082,26 @@ function pushRecord(light){
   LS.setItem('ast_records',JSON.stringify(recs));
   renderHistorial();
 }
-async function entregar(doc,fn,titulo,texto,email,mode){
+/* ===== Envío del formato por correo al equipo SST (Google Apps Script) ===== */
+const MAIL_URL = 'https://script.google.com/macros/s/AKfycbxCLbHdn3OmHZz17yfGC0ekBEeP9GwVhy8KZWIo_NRl1zKrPLF-D25Xfzt-TZJdIRS9/exec';
+const MAIL_KEY = 'ION-MAIL-7Qx4Nw9Lk2Vb';
+async function enviarMail(doc,fn,email,meta){
+  const btns=[...document.querySelectorAll('.btn-mail')];
+  btns.forEach(b=>{ b.disabled=true; b.dataset.t=b.textContent; b.textContent='⏳ Enviando...'; });
+  let ok=false, err='';
+  try{
+    const pdfBase64=doc.output('datauristring').split(',').pop();
+    const res=await fetch(MAIL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({key:MAIL_KEY,fileName:fn,pdfBase64,remitente:email||'',...meta})});
+    const j=await res.json().catch(()=>({}));
+    ok=res.ok && j.ok!==false; err=j.error||'';
+  }catch(e){ err=e.message; }
+  btns.forEach(b=>{ b.disabled=false; b.textContent=b.dataset.t; });
+  if(ok) toast('✓ Enviado por correo al equipo SST');
+  else{ doc.save(fn); toast('⚠ No se pudo enviar ('+(err||'sin conexión')+'). El PDF se descargó: envíelo manualmente.'); }
+}
+async function entregar(doc,fn,titulo,texto,email,mode,meta){
+  if(mode==='mail'){ await enviarMail(doc,fn,email,meta); return; }
   if(mode==='pdf'){ doc.save(fn); toast('✓ PDF generado y registro guardado'); return; }
   const blob=doc.output('blob');
   const file=new File([blob],fn,{type:'application/pdf'});
@@ -1106,7 +1128,7 @@ async function finalizarAST(m){
     firmaResp:!!d.firmaResp, firmaRev:!!d.firmaRev,
     fotos:{area:d.fotos.area.length, epp:d.fotos.epp.length},
     participantes:d.participantes.map(p=>({...p,firma:!!p.firma}))});
-  await entregar(doc,fn,'AST — '+d.trabajo,'AST '+d.fecha+' · '+d.trabajo+' · Responsable: '+d.resp,d.email,m);
+  await entregar(doc,fn,'AST — '+d.trabajo,'AST '+d.fecha+' · '+d.trabajo+' · Responsable: '+d.resp,d.email,m,{tipo:'AST — Análisis Seguro de Trabajo',codigo:'ION-SST-RGT-14',empresa:'',proyecto:d.ubicacion,area:d.ubicacion,fecha:d.fecha,resp:d.resp,noCumple:0});
  }catch(err){ console.error(err); toast('⚠ Error al generar: '+err.message); }
 }
 
@@ -1117,11 +1139,11 @@ const SINO_OPS=['SI','NO','N/A'];
 const PT_DEFS={
 pt09:{
  codigo:'ION-SST-RGT-09', rev:'1', nombre:'Permiso de Trabajo — General', pdfTitulo:'PERMISO DE TRABAJO',
- req:[['empresa','Empresa / Contratista'],['area','Área / Ubicación exacta'],['desc','Descripción del trabajo']],
+ req:[['empresa','Empresa / Contratista'],['proyecto','Proyecto / Obra'],['area','Área / Ubicación exacta'],['desc','Descripción del trabajo']],
  pasos:[
   {titulo:'Datos', secciones:[
    {tipo:'campos', titulo:'1. ANTECEDENTES GENERALES', campos:[
-    {id:'empresa',label:'Empresa / Contratista',req:1},{id:'proyecto',label:'Proyecto / Obra'},
+    {id:'empresa',label:'Empresa / Contratista',req:1},{id:'proyecto',label:'Proyecto / Obra',req:1},
     {id:'area',label:'Área / Ubicación exacta',req:1},{id:'supervisor',label:'Supervisor responsable'},
     {id:'desde',label:'Vigencia desde (fecha/hora)'},{id:'hasta',label:'Vigencia hasta (fecha/hora)'},
     {id:'ptnum',label:'PT N° (correlativo)'},{id:'ntrab',label:'N° de trabajadores',t:'number'}]},
@@ -1188,11 +1210,11 @@ pt09:{
 },
 pt23:{
  codigo:'ION-SST-RGT-23', rev:'0', nombre:'PT en Caliente', pdfTitulo:'PERMISO DE TRABAJO EN CALIENTE',
- req:[['empresa','Empresa / Contratista'],['area','Área / Sector'],['desc','Descripción del trabajo']],
+ req:[['empresa','Empresa / Contratista'],['proyecto','Proyecto / Obra'],['area','Área / Sector'],['desc','Descripción del trabajo']],
  pasos:[
   {titulo:'Datos', secciones:[
    {tipo:'campos', titulo:'1. ANTECEDENTES GENERALES', campos:[
-    {id:'empresa',label:'Empresa / Contratista',req:1},{id:'proyecto',label:'Proyecto / Obra'},
+    {id:'empresa',label:'Empresa / Contratista',req:1},{id:'proyecto',label:'Proyecto / Obra',req:1},
     {id:'area',label:'Área / Sector',req:1},{id:'correlativo',label:'N° correlativo'},
     {id:'fecha',label:'Fecha actividad',t:'date'},{id:'horaini',label:'Hora inicio',t:'time'},
     {id:'horafin',label:'Hora término',t:'time'},{id:'ptgeneral',label:'N° PT General (ION-SST-RGT-09)'},
@@ -1234,11 +1256,11 @@ pt23:{
 },
 pt24:{
  codigo:'ION-SST-RGT-24', rev:'0', nombre:'PT en Altura', pdfTitulo:'PERMISO DE TRABAJO EN ALTURA',
- req:[['empresa','Empresa / Contratista'],['sector','Sector de la actividad'],['desc','Trabajo a realizar']],
+ req:[['empresa','Empresa / Contratista'],['proyecto','Proyecto / Obra'],['sector','Sector de la actividad'],['desc','Trabajo a realizar']],
  pasos:[
   {titulo:'Datos', secciones:[
    {tipo:'campos', titulo:'1. ANTECEDENTES GENERALES', campos:[
-    {id:'empresa',label:'Empresa / Contratista',req:1},{id:'proyecto',label:'Proyecto / Obra'},
+    {id:'empresa',label:'Empresa / Contratista',req:1},{id:'proyecto',label:'Proyecto / Obra',req:1},
     {id:'sector',label:'Sector de la actividad',req:1},{id:'altura',label:'Altura máx. de trabajo (m)',t:'number'},
     {id:'fechas',label:'Fecha: desde / hasta'},{id:'horas',label:'Hr. inicio / Hr. término'},
     {id:'ptgeneral',label:'N° PT General (ION-SST-RGT-09)'},{id:'supervisor',label:'Supervisor responsable'}]},
@@ -1282,11 +1304,11 @@ pt24:{
 },
 pt27:{
  codigo:'ION-SST-RGT-27', rev:'1', nombre:'PT de Izaje', pdfTitulo:'PERMISO DE TRABAJO DE IZAJE',
- req:[['empresa','Empresa / Contratista'],['area','Área / Sector'],['desccarga','Descripción de la carga']],
+ req:[['empresa','Empresa / Contratista'],['proyecto','Proyecto / Obra'],['area','Área / Sector'],['desccarga','Descripción de la carga']],
  pasos:[
   {titulo:'Datos·Carga', secciones:[
    {tipo:'campos', titulo:'1. ANTECEDENTES GENERALES', campos:[
-    {id:'empresa',label:'Empresa / Contratista',req:1},{id:'proyecto',label:'Proyecto / Obra'},
+    {id:'empresa',label:'Empresa / Contratista',req:1},{id:'proyecto',label:'Proyecto / Obra',req:1},
     {id:'area',label:'Área / Sector',req:1},{id:'fecha',label:'Fecha actividad',t:'date'},
     {id:'horas',label:'Hora inicio / término'},{id:'ptgeneral',label:'PT General asociado N°'}]},
    {tipo:'textarea', titulo:'2.1 DESCRIPCIÓN DE LA CARGA', id:'desccarga', req:1},
@@ -1364,6 +1386,8 @@ function buildPT(id){
     <div id="ptResumen"></div>
     <label class="fl">Correo del supervisor / prevencionista</label>
     <input type="email" id="pt_email" placeholder="supervisor@empresa.cl">
+    <button class="btn green btn-mail" onclick="finalizarPT('mail')">✉ Enviar al equipo SST</button>
+    <p class="sub" style="margin:6px 2px 12px">Envía el PDF por correo a t.salazar, c.latorre, j.verdugo y b.sandoval (@ion-chile.com).</p>
     <button class="btn primary" onclick="finalizarPT('pdf')">⬇ Generar y descargar PDF</button>
     <button class="btn blue" onclick="finalizarPT('share')">📤 Compartir / Enviar por correo</button>
     <button class="btn ghost" onclick="nuevoDoc()">🗒 Nuevo documento en blanco</button>
@@ -1700,7 +1724,7 @@ async function finalizarPT(m){
     fotos:Object.values(d.fotos).reduce((a,f)=>a+f.arr.length,0),
     participantes:parts.map(p=>({nombre:p.nombre||'',ci:p.rut||'',cargo:p.cargo||'',firma:!!p.firma})),
     ts:d.ts});
-  await entregar(doc,fn,def.nombre+' — '+(d.campos.empresa||''),def.nombre+' ('+def.codigo+') · '+fecha+' · '+(d.campos.empresa||''),d.email,m);
+  await entregar(doc,fn,def.nombre+' — '+(d.campos.empresa||''),def.nombre+' ('+def.codigo+') · '+fecha+' · '+(d.campos.empresa||''),d.email,m,{tipo:def.nombre,codigo:def.codigo,empresa:d.campos.empresa||'',proyecto:d.campos.proyecto||'',area:d.campos.area||d.campos.sector||'',fecha,resp:d.campos.supervisor||'',noCumple:sinoTot.filter(i=>i[1]==='NO').length});
  }catch(err){ console.error(err); toast('⚠ Error al generar: '+err.message); }
 }
 
