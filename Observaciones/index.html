@@ -1690,17 +1690,15 @@ function goHome(){
   document.getElementById('hdrTitle').textContent='Observaciones y Reportes SST';
   document.getElementById('hdrSub').textContent='Seguridad, Salud Ocupacional y Medio Ambiente';
   const lc=document.getElementById('lstCount'); if(lc) lc.textContent=LSTS.length+' formatos: equipos, herramientas, vehículos, maquinaria, altura, instalaciones y emergencias';
-  const mc=document.getElementById('maCount'); if(mc) mc.textContent=(MAS.length+2)+' formatos: visita completa, '+MAS.length+' apartados y estación de emergencia ambiental';
+  const mc=document.getElementById('maCount'); if(mc) mc.textContent=(MAS.length+1)+' formatos: '+MAS.length+' apartados y estación de emergencia ambiental';
   renderHistorial();
 }
 function openListaMA(){
   mode='lista'; show('maView');
   document.getElementById('hdrTitle').textContent='Check List MA';
-  document.getElementById('hdrSub').textContent=(MAS.length+2)+' formatos · Medio Ambiente';
+  document.getElementById('hdrSub').textContent=(MAS.length+1)+' formatos · Medio Ambiente';
   const card=(id,ic,nom,sub)=>`<div class="menu-card" onclick="openDoc('${id}')"><span class="ic">${ic}</span><span class="tx"><b>${esc(nom)}</b><small>${esc(sub)}</small></span><span class="go">›</span></div>`;
   document.getElementById('maItems').innerHTML=
-    `<h4 class="ck-sub lst-cat">Visita completa</h4>`+
-    card('checklistma','🌿','Todos los apartados en un solo formato','ION-MA-RGT-01* · Recorrido completo de cumplimiento ambiental')+
     `<h4 class="ck-sub lst-cat">Por apartado (${MAS.length})</h4>`+
     MAS.map(m=>card(m.id,m.ic,m.nombre,'ION-MA-RGT-01-'+m.num+'* · '+m.n+' indicadores')).join('')+
     `<h4 class="ck-sub lst-cat">Emergencia ambiental</h4>`+
