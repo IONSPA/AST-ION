@@ -574,8 +574,7 @@ nav.bottom button{flex:1; border:none; border-radius:12px; padding:14px; font-si
 <section class="card">
   <h2>Check list de visita a terreno</h2>
   <p class="sub">Inspección punto por punto: Cumple / No cumple / N/A, con observaciones, fotos y firmas.</p>
-  <div class="menu-card" onclick="openDoc('checklistma')"><span class="ic">🌿</span><span class="tx"><b>Check list Medio Ambiente</b><small>ION-MA-RGT-01* · Cumplimiento ambiental: emisiones, ruido, residuos, agua, patrimonio, flora y fauna, comunidad</small></span><span class="go">›</span></div>
-  <div class="menu-card" onclick="openDoc('lstAMB01')"><span class="ic">🛢️</span><span class="tx"><b>Estación de emergencia ambiental</b><small>ION-AMB-LST-01 · Kit antiderrames: absorbentes, EPP químico, HDS, señalética</small></span><span class="go">›</span></div>
+  <div class="menu-card" onclick="openListaMA()"><span class="ic">🌿</span><span class="tx"><b>Check List MA</b><small id="maCount">Emisiones, ruido, residuos, agua, patrimonio, flora y fauna, comunidad y estación de emergencia ambiental</small></span><span class="go">›</span></div>
   <div class="menu-card" onclick="openLista()"><span class="ic">🦺</span><span class="tx"><b>Check list SST</b><small id="lstCount">Equipos, herramientas, vehículos y maquinaria, altura, instalaciones y emergencias</small></span><span class="go">›</span></div>
 </section>
 <section class="card">
@@ -593,6 +592,15 @@ nav.bottom button{flex:1; border:none; border-radius:12px; padding:14px; font-si
   <p class="sub">Seleccione el formato a completar. Códigos ION-SST-LST.</p>
   <input type="text" id="lstSearch" placeholder="Buscar (ej: camioneta, arnés, extintor, 29)" oninput="renderLista()" autocomplete="off">
   <div id="lstItems"></div>
+</section>
+</div>
+
+<!-- ==================== SUBLISTADO CHECK LIST MA ==================== -->
+<div id="maView" style="display:none">
+<section class="card">
+  <h2>Check List MA</h2>
+  <p class="sub">Seleccione el check list a completar. Cada apartado se registra y se envía por separado.</p>
+  <div id="maItems"></div>
 </section>
 </div>
 
@@ -888,6 +896,17 @@ checklistma:{
 },
 };
 
+
+/* ================= CHECK LIST MA — un formato por apartado ================= */
+const MA_ICONS={emis:'💨',ruido:'🔊',resind:'🏭',resdom:'🗑️',respel:'☣️',resliq:'💧',agua:'🚰',patri:'🏺',flora:'🦎',comu:'👥'};
+const MAS=[];
+DOC_DEFS.checklistma.pasos.filter(p=>p.secciones[0]&&p.secciones[0].tipo==='checklist').forEach((st,i)=>{
+  const base=DOC_DEFS.checklistma, n=String(i+1).padStart(2,'0'), id='ma'+n, key=st.secciones[0].key;
+  DOC_DEFS[id]={codigo:'ION-MA-RGT-01-'+n, rev:'0', nombre:'Check list MA — '+st.h2,
+    pdfTitulo:('CHECK LIST INSPECCIÓN TERRENO — '+st.h2).toUpperCase(),
+    req:base.req, pasos:[base.pasos[0], st, CK_CIERRE, CK_FOTOS], notaPie:base.notaPie};
+  MAS.push({id,num:n,nombre:st.h2,ic:MA_ICONS[key]||'🌿',n:st.secciones[0].grupos.reduce((a,g)=>a+g.items.length,0)});
+});
 
 /* ================= CHECK LIST SST (ION-SST-LST) — generador de formatos ================= */
 const N_ELEC="Referencias: Pliego Técnico RIC (SEC); D.S. N°44/2024 MINTRAB; D.S. N°594/1999 MINSAL; Estándar ION-SST-EST-16 Uso de herramientas eléctricas. Todo ítem en M/NO impide el uso hasta su corrección.";
@@ -1661,7 +1680,7 @@ function exportCSV(){
 /* ================= NAVEGACIÓN GLOBAL ================= */
 let mode='home';
 function show(id){
-  ['homeView','lstView','docView'].forEach(v=>document.getElementById(v).style.display = v===id?'block':'none');
+  ['homeView','lstView','maView','docView'].forEach(v=>document.getElementById(v).style.display = v===id?'block':'none');
   document.querySelector('nav.bottom').style.display = id==='docView'?'flex':'none';
   document.getElementById('btnHome').style.display = id==='homeView'?'none':'block';
   window.scrollTo({top:0});
@@ -1671,7 +1690,22 @@ function goHome(){
   document.getElementById('hdrTitle').textContent='Observaciones y Reportes SST';
   document.getElementById('hdrSub').textContent='Seguridad, Salud Ocupacional y Medio Ambiente';
   const lc=document.getElementById('lstCount'); if(lc) lc.textContent=LSTS.length+' formatos: equipos, herramientas, vehículos, maquinaria, altura, instalaciones y emergencias';
+  const mc=document.getElementById('maCount'); if(mc) mc.textContent=(MAS.length+2)+' formatos: visita completa, '+MAS.length+' apartados y estación de emergencia ambiental';
   renderHistorial();
+}
+function openListaMA(){
+  mode='lista'; show('maView');
+  document.getElementById('hdrTitle').textContent='Check List MA';
+  document.getElementById('hdrSub').textContent=(MAS.length+2)+' formatos · Medio Ambiente';
+  const card=(id,ic,nom,sub)=>`<div class="menu-card" onclick="openDoc('${id}')"><span class="ic">${ic}</span><span class="tx"><b>${esc(nom)}</b><small>${esc(sub)}</small></span><span class="go">›</span></div>`;
+  document.getElementById('maItems').innerHTML=
+    `<h4 class="ck-sub lst-cat">Visita completa</h4>`+
+    card('checklistma','🌿','Todos los apartados en un solo formato','ION-MA-RGT-01* · Recorrido completo de cumplimiento ambiental')+
+    `<h4 class="ck-sub lst-cat">Por apartado (${MAS.length})</h4>`+
+    MAS.map(m=>card(m.id,m.ic,m.nombre,'ION-MA-RGT-01-'+m.num+'* · '+m.n+' indicadores')).join('')+
+    `<h4 class="ck-sub lst-cat">Emergencia ambiental</h4>`+
+    card('lstAMB01','🛢️','Estación de emergencia ambiental','ION-AMB-LST-01 · Kit antiderrames: absorbentes, EPP químico, HDS, señalética')+
+    `<p class="sub" style="margin:10px 2px 0">*Códigos referenciales, a confirmar con el área de Medio Ambiente.</p>`;
 }
 function openLista(){
   mode='lista'; show('lstView');
